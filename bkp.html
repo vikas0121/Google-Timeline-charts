@@ -1,0 +1,246 @@
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <title>JSON to CSV</title>
+	<script src="https://ajax.aspnetcdn.com/ajax/jQuery/jquery-3.2.1.min.js"></script>
+ 
+	 <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+	 <script type="text/javascript" src="https://www.google.com/jsapi"></script>
+	 <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js" type="text/javascript"></script>
+<style>
+.ggl-tooltip {
+  border: 1px solid #E0E0E0;
+  font-family: Arial, Helvetica;
+  padding: 6px 6px 6px 6px;
+}
+
+.ggl-tooltip span {
+  font-weight: bold;
+}
+</style>
+    <script type="text/javascript">
+	
+	//InitiateChartMaking(7436,'2017-11-08');
+	InitiateChartMaking(8354,'2017-11-08');
+	function InitiateChartMaking(UserId, reportDate) {
+    userID = UserId;
+    google.charts.load("current", { packages: ["timeline"] });
+    google.charts.setOnLoadCallback(drawChart1);
+
+    function drawChart1() {
+        console.log(UserId);
+        var container = document.getElementById('chart_div');
+        var chart = new google.visualization.Timeline(container);
+        var dataTable = new google.visualization.DataTable();
+        dataTable.addColumn({ type: 'string', id: 'UserId' });
+		dataTable.addColumn({ type: 'string' ,id:'Lead'})
+		//dataTable.addColumn({ type: 'string', cid: 'callStatus',p: {html: true}, role:'tooltip'});
+		//dataTable.addColumn({ type: 'string',p: {html: true}});
+        //dataTable.addColumn({ type: 'string', role: 'Lead' });
+        dataTable.addColumn({ type: 'date', id: 'Start' });
+        dataTable.addColumn({ type: 'date', id: 'End' });
+		dataTable.addColumn({ type: 'string'}); //category column
+		
+        var url = 'http://xyz/communication/leadprioritization.svc/GetAgentTrackingData/' + userID;
+        console.log(url);
+        $.ajax({
+            url: url,
+            type: 'GET',
+            contentType: 'application/json;charset=utf-8',
+            cache: false,
+            success: function (response) {
+                rec = eval(response);
+                console.log(rec.UserBookingTimes);
+                if (rec != undefined && rec != null) {
+
+                    for (var i = 0; i < rec.lstDialerDispDetails.length; i++) {
+	
+						var agentId = rec.lstDialerDispDetails[i].AgentId != undefined ? rec.lstDialerDispDetails[i].AgentId : ""
+                        var LeadId = rec.lstDialerDispDetails[i].LeadID != undefined ? rec.lstDialerDispDetails[i].LeadID : "";
+                        var calldate = rec.lstDialerDispDetails[i].callDate != undefined ? ConvertJsonDateToNormal(rec.lstDialerDispDetails[i].callDate) : "";
+						
+                        var duration = rec.lstDialerDispDetails[i].Duration != undefined ? rec.lstDialerDispDetails[i].Duration : "";
+                        // var callEndDate = calldate.setSeconds(calldate.getSeconds() + 10);
+						if(calldate.getHours()== 10 && calldate.getMinutes()< 30){
+                        var callStartDate = new Date(calldate.getFullYear(), calldate.getMonth(), calldate.getDate(), calldate.getHours(), calldate.getMinutes(), calldate.getSeconds(),calldate.getMilliseconds());
+                        var callEndDate = new Date(calldate.getFullYear(), calldate.getMonth(), calldate.getDate(), calldate.getHours(), calldate.getMinutes(), calldate.getSeconds() + duration, calldate.getMilliseconds());
+                        var leadInfo = LeadId.toString();
+                        //var Agent = rec.lstDialerDispDetails[i].AgentId != undefined ? rec.lstDialerDispDetails[i].AgentId.toString() : "";
+                        var Agent = rec.lstDialerDispDetails[i].AgentName != undefined ? rec.lstDialerDispDetails[i].AgentName : "";
+						Agent = Agent + " " + agentId.toString();
+						var talktime  = rec.lstDialerDispDetails[i].talktime == undefined ? 0: rec.lstDialerDispDetails[i].talktime;
+						var callStatus = talktime > 0 ? 'A' : 'B';
+						leadInfo = leadInfo + ' '+ talktime + callStatus;
+						
+						var data = "";
+						if(i>0){
+							data = CheckBookingPresent(rec.lstDialerDispDetails[i-1],rec.lstDialerDispDetails[i], rec.UserBookingTimes, callStartDate, callEndDate);
+						}					
+						
+						if(data != undefined && data != ""){
+							for(j=0 ; j<data.length ; j++){
+							console.log(data[j]);
+							// 'C' for booking category
+							//data[j].leadInfo = data[j].leadInfo + " " + 'Booked';
+								dataTable.addRows([[data[j].Agent,data[j].leadInfo, data[j].callStartDate, data[j].callEndDate,data[j].callStatus]]);
+							}
+						}
+						//}
+						else{
+							
+							dataTable.addRows([[Agent,leadInfo, callStartDate, callEndDate,callStatus]]);
+						}
+						}
+                    }
+					
+					dataTable.insertColumn(2, {type: 'string', role: 'tooltip', p: {html: true}});
+
+					var dateFormat = new google.visualization.DateFormat({
+					  pattern: 'h:mm a'
+					});
+					//console.log(dataTable);
+					    var colors = [];
+						var colorMap = {
+							// should contain a map of category -> color for every category
+							'A': '#FF4500',
+							'B': '#19c362',
+							'C': '#592df7'
+						}
+						for (var i = 0; i < dataTable.getNumberOfRows(); i++) {
+							
+							 var tooltip = '<div class="ggl-tooltip"><span>' +
+								dataTable.getValue(i, 1) + '</span></div><div class="ggl-tooltip"><span>' +
+								dataTable.getValue(i, 0) + '</span>: ' +
+								dateFormat.formatValue(dataTable.getValue(i, 3)) + ' - ' +
+								dateFormat.formatValue(dataTable.getValue(i, 4)) + '</div>';
+
+							  dataTable.setValue(i, 2, tooltip);
+							
+							console.log(colorMap[dataTable.getValue(i, 4)] + ' ' + dataTable.getValue(i, 4));
+							colors.push(colorMap[dataTable.getValue(i, 4)]);
+	  
+						}
+						var options = {
+						 //timeline: {colorByRowLabel: true},
+                        //timeline: { singleColor: '0000ff' },
+						timeline: {groupByRowLabel : true },
+						tooltip: {isHtml: true},
+                        avoidOverlappingGridLines: true,
+						  colors: colors
+                    };
+					var dataView = new google.visualization.DataView(dataTable);
+					//dataView.hideColumns([4]);
+					//view.setColumns([0,2,3, 4]);
+                    chart.draw(dataView, options);
+                }
+            }
+        });
+    
+}
+
+
+function ConvertJsonDateToNormal(JsonDate) {
+    if (JsonDate == "" || JsonDate == undefined || JsonDate == "")
+        return "";
+    try {
+        var d = new Date(JsonDate.match(/\d+/)[0] * 1);
+        return d;
+
+    }
+    catch (err) {
+        return "";
+
+    }
+}
+
+function ConvertJsonDateToNormalDate(JsonDate) {
+    if (JsonDate == "" || JsonDate == undefined || JsonDate == "")
+        return "";
+    try {
+        var d = new Date(JsonDate.match(/\d+/)[0] * 1);
+        var formattedDate = d.getDate() + "-" + (d.getMonth() + 1) + "-" + d.getFullYear();
+        return formattedDate;
+    }
+    catch (err) {
+		console.log('Error occured');
+        return "";
+
+    }
+}
+
+function CheckBookingPresent(lastRecord ,record, userBookingTimes, callStartDate, callEndDate) {
+		var isPresent = false;
+         userBookingTimes.some(function(element,i) {
+		 //console.log('Check Agent');
+			//console.log(element.Key);
+			if(element.Key === record.AgentId){
+				isPresent = true;
+				return true;
+			}
+		});
+		if(isPresent)
+		{
+			var result = userBookingTimes.filter(function( obj ) {
+			return obj.Key == record.AgentId;
+			});
+			for(i=0 ; i<result[0].Value.length ; i++){
+				//console.log(result[0].Value[i]);
+				//console.log(ConvertJsonDateToNormal(result[0].Value[i]));
+				var bookingDate = ConvertJsonDateToNormal(result[0].Value[i]);
+				var lastEndDate = ConvertJsonDateToNormal(lastRecord.callDate);
+				var duration = lastRecord.Duration != undefined ? lastRecord.Duration : 0;
+				
+				lastEndDate = new Date(lastEndDate.getFullYear(), lastEndDate.getMonth(), lastEndDate.getDate(), lastEndDate.getHours(), lastEndDate.getMinutes(), lastEndDate.getSeconds() + duration, lastEndDate.getMilliseconds());
+				if(bookingDate >= callStartDate && bookingDate <= callEndDate){
+					var data = [{
+							'Agent': record.AgentName + " " + record.AgentId.toString(),
+							'leadInfo': "hello",
+							'callStartDate': callStartDate,
+							'callEndDate': new Date(bookingDate.getFullYear(), bookingDate.getMonth(), bookingDate.getDate(), bookingDate.getHours(), bookingDate.getMinutes(), bookingDate.getSeconds(), bookingDate.getMilliseconds()),
+							'callStatus': 'A'
+						},
+						{
+							'Agent': record.AgentName + " " + record.AgentId.toString(),
+							'leadInfo': "hello",
+							'callStartDate': new Date(bookingDate.getFullYear(), bookingDate.getMonth(), bookingDate.getDate(), bookingDate.getHours(), bookingDate.getMinutes(), bookingDate.getSeconds()+2, bookingDate.getMilliseconds()+2),
+							'callEndDate': new Date(bookingDate.getFullYear(), bookingDate.getMonth(), bookingDate.getDate(), bookingDate.getHours(), bookingDate.getMinutes(), bookingDate.getSeconds() +3, bookingDate.getMilliseconds()),
+							'callStatus': 'C'
+						},
+						{
+							'Agent': record.AgentName + " " + record.AgentId.toString(),
+							'leadInfo': "hello",
+							'callStartDate': new Date(bookingDate.getFullYear(), bookingDate.getMonth(), bookingDate.getDate(), bookingDate.getHours(), bookingDate.getMinutes(), bookingDate.getSeconds()+4, bookingDate.getMilliseconds()+2),
+							'callEndDate': callEndDate,
+							'callStatus': 'A'
+						}
+					];
+					return data;
+				}
+				else if(bookingDate >= lastEndDate && bookingDate <= callStartDate){
+					var data = [{
+						'Agent': record.AgentName + " " + record.AgentId.toString(),
+						'leadInfo': "hello",
+						'callStartDate': new Date(bookingDate.getFullYear(), bookingDate.getMonth(), bookingDate.getDate(), bookingDate.getHours(), bookingDate.getMinutes(), bookingDate.getSeconds(), bookingDate.getMilliseconds()),
+						'callEndDate': new Date(bookingDate.getFullYear(), bookingDate.getMonth(), bookingDate.getDate(), bookingDate.getHours(), bookingDate.getMinutes(), bookingDate.getSeconds(), bookingDate.getMilliseconds()),
+						'callStatus': 'C'
+					}];
+					return data;
+				}
+				
+			}
+			
+		}
+		else{
+					return "";
+				}
+	}
+}	
+    </script>
+
+</head>
+<body>
+    <h1>Agent Tracker...</h1>
+	<div>
+  <div id="chart_div" style="height: 100%;"></div>
+</div>
+</body>
+</html>
